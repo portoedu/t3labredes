@@ -45,6 +45,8 @@ int main(int argc, char *argv[])
 
 	/* End of configuration. Now we can receive data using raw sockets. */
 
+	char* app;
+	//struct application* app;
 	while (1){
 		numbytes = recvfrom(sockfd, buffer_u.raw_data, ETH_LEN, 0, NULL, NULL);
 		if (buffer_u.cooked_data.ethernet.eth_type == ntohs(ETH_P_IP) && buffer_u.cooked_data.payload.ip.proto == PROTO_UDP && buffer_u.cooked_data.payload.udp.udphdr.dst_port == ntohs(DST_PORT)){
@@ -56,18 +58,20 @@ int main(int argc, char *argv[])
 				buffer_u.cooked_data.payload.ip.dst[2], buffer_u.cooked_data.payload.ip.dst[3],
 				buffer_u.cooked_data.payload.ip.proto
 			);
-			//if (buffer_u.cooked_data.payload.ip.proto == PROTO_UDP && buffer_u.cooked_data.payload.udp.udphdr.dst_port == ntohs(DST_PORT)){
 				p = (char *)&buffer_u.cooked_data.payload.udp.udphdr + ntohs(buffer_u.cooked_data.payload.udp.udphdr.udp_len);
 				*p = '\0';
 				printf("src port: %d dst port: %d size: %d msg: %s \n", 
 				ntohs(buffer_u.cooked_data.payload.udp.udphdr.src_port), ntohs(buffer_u.cooked_data.payload.udp.udphdr.dst_port),
 				ntohs(buffer_u.cooked_data.payload.udp.udphdr.udp_len), (char *)&buffer_u.cooked_data.payload.udp.udphdr + sizeof(struct udp_hdr)
 				); 
-			//}
+				app = &buffer_u.cooked_data.payload.udp.udphdr + sizeof(struct udp_hdr);	
+				printf("%c %c %c %c \n", app[0], app[1], app[2], app[3]);
+
+				//printf("id %d \n", app->id);
+				//printf("id : %d , controle %d, padd %d, data: %s , chk %d\n", app->id, app->controle, app->padd, app->data, app->app_chksum);
+
 			continue;
 		}
-				
-		//printf("got a packet, %d bytes\n", numbytes);
 	}
 
 	return 0;

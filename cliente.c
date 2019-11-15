@@ -14,8 +14,8 @@
 #include "checksum.h"
 
 char this_mac[6];
-char bcast_mac[6] =	{0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-char dst_mac[6] =	{0x00, 0x00, 0x00, 0x22, 0x22, 0x22};
+//char bcast_mac[6] =	{0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+char dst_mac[6] =	{0x80, 0x00, 0x27, 0x12, 0x38, 0x8e};
 char src_mac[6] =	{0x00, 0x00, 0x00, 0x33, 0x33, 0x33};
 
 union eth_buffer buffer_u;
@@ -38,7 +38,6 @@ int main(int argc, char *argv[])
 	char ifName[IFNAMSIZ];
 	struct sockaddr_ll socket_address;
 	int sockfd, numbytes;
-	//uint8_t msg[] = "hello world!! =)";
 	struct application app;
 	FILE * file;
 	int size;
@@ -95,8 +94,8 @@ int main(int argc, char *argv[])
 	/* End of configuration. Now we can send data using raw sockets. */
 
 	/* Fill the Ethernet frame header */
-	memcpy(buffer_u.cooked_data.ethernet.dst_addr, bcast_mac, 6);
-	memcpy(buffer_u.cooked_data.ethernet.src_addr, src_mac, 6);
+	memcpy(buffer_u.cooked_data.ethernet.dst_addr, dst_mac, 6);
+	memcpy(buffer_u.cooked_data.ethernet.src_addr, dst_mac, 6);
 	buffer_u.cooked_data.ethernet.eth_type = htons(ETH_P_IP);
 
 	/* Fill IP header data. Fill all fields and a zeroed CRC field, then update the CRC! */
@@ -150,8 +149,8 @@ int main(int argc, char *argv[])
 	}
 
 	memcpy(&app.data, argv[2], sizeof(argv[2]) + 1);
-	app.app_chksum = in_cksum(&app, sizeof(app.id) + sizeof(app.controle) + sizeof(app.padd) + sizeof(app.data));
-	app.data[sizeof(app.data)] = '\0';
+	app.app_chksum = htons(in_cksum(&app, sizeof(app.id) + sizeof(app.controle) + sizeof(app.padd) + sizeof(app.data)));
+	//app.data[sizeof(app.data)] = '\0';
 
 	printf("id : %d , controle %d, padd %d, data: %s , chk %d\n", app.id, app.controle, app.padd, app.data, app.app_chksum);
 
@@ -163,5 +162,6 @@ int main(int argc, char *argv[])
 	if (sendto(sockfd, buffer_u.raw_data, sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(struct application), 0, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll)) < 0)
 		printf("Send failed\n");
 
+	fclose(file);
 	return 0;
 }
