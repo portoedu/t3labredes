@@ -14,10 +14,7 @@
 #include "checksum.h"
 
 char this_mac[6];
-//char bcast_mac[6] =	{0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-char dst_mac[6] =	{0x80, 0x00, 0x27, 0x12, 0x38, 0x8e};
-char src_mac[6] =	{0x00, 0x00, 0x00, 0x33, 0x33, 0x33};
-
+char dst_mac[6] =	{0x08, 0x00, 0x27, 0x12, 0x38, 0x8e};
 union eth_buffer buffer_u;
 
 uint32_t ipchksum(uint8_t *packet)
@@ -96,7 +93,7 @@ int main(int argc, char *argv[])
 
 	/* Fill the Ethernet frame header */
 	memcpy(buffer_u.cooked_data.ethernet.dst_addr, dst_mac, 6);
-	memcpy(buffer_u.cooked_data.ethernet.src_addr, dst_mac, 6);
+	memcpy(buffer_u.cooked_data.ethernet.src_addr, this_mac, 6);
 	buffer_u.cooked_data.ethernet.eth_type = htons(ETH_P_IP);
 
 	/* Fill IP header data. Fill all fields and a zeroed CRC field, then update the CRC! */

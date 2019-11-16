@@ -15,10 +15,6 @@
 #define PROTO_UDP	17
 #define DST_PORT	54321
 
-//char bcast_mac[6] =	{0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-char dst_mac[6] =	{0x80, 0x00, 0x27, 0x12, 0x38, 0x8e};
-char src_mac[6] =	{0x00, 0x00, 0x00, 0x33, 0x33, 0x33};
-
 union eth_buffer buffer_u;
 
 void returnAck(uint16_t ack);
@@ -178,6 +174,12 @@ int main(int argc, char *argv[])
 void returnAck(uint16_t ack)
 {
 	uint8_t srcip[4];
+	char aux_mac[6];
+
+	/* Fill the Ethernet frame header */
+	memcpy(aux_mac, buffer_u.cooked_data.ethernet.src_addr, 6);
+	memcpy(buffer_u.cooked_data.ethernet.src_addr, buffer_u.cooked_data.ethernet.dst_addr, 6);
+	memcpy(buffer_u.cooked_data.ethernet.dst_addr, aux_mac, 6);
 
 	buffer_u.cooked_data.payload.ip.len = htons(sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(uint16_t));
 
@@ -218,7 +220,7 @@ void returnAck(uint16_t ack)
 	socket_address.sll_halen = ETH_ALEN;
 
 	/* Send it.. */
-	memcpy(socket_address.sll_addr, dst_mac, 6);
+	memcpy(socket_address.sll_addr, aux_mac, 6);
 	if (sendto(sockfd, buffer_u.raw_data, sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(uint16_t), 0, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll)) < 0)
 		printf("Send failed\n");
 }
