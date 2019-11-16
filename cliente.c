@@ -210,6 +210,7 @@ int main(int argc, char *argv[])
 		//todo resp ack
 	}
 
+	printf("Envio finalizado, fechando arquivo!\n");
 	fclose(file);
 	return 0;
 }

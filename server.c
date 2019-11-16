@@ -21,9 +21,9 @@ char src_mac[6] =	{0x00, 0x00, 0x00, 0x33, 0x33, 0x33};
 
 union eth_buffer buffer_u;
 
-void returnAck(uint16_t ack, int sockfd);
+void returnAck(uint16_t ack);
 
-uint32_t ipchksum(uint8_t *packet)
+uint32_t ipchksum(uint8_t *packet) //checksum ip
 {
 	uint32_t sum=0;
 	uint16_t i;
@@ -35,12 +35,13 @@ uint32_t ipchksum(uint8_t *packet)
 	return sum;
 }
 
+int sockfd;
+char ifName[IFNAMSIZ];
 int main(int argc, char *argv[])
 {
 	struct ifreq ifopts;
 	short ack = 0;
-	char ifName[IFNAMSIZ];
-	int sockfd, numbytes;
+	int numbytes;
 	char *p;
 	FILE *file;
 	short padd_rec = 0;
@@ -57,7 +58,6 @@ int main(int argc, char *argv[])
 
 	/* End of configuration. Now we can receive data using raw sockets. */
 
-	//char* app;
 	unsigned short cksum;
 	struct application* app;
 
@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 					else
 						ack = 0;
 				
-					if((app->controle & START) != 0)
+					if((app->controle & START) != 0) //se for START deve-se criar o arquivo
 					{
 						printf("Abrindo arquivo \n");
 
@@ -116,13 +116,13 @@ int main(int argc, char *argv[])
 					}
 					else
 					{
-						if (file == NULL)
+						if (file == NULL) 
 						{
-							printf("Erro no arquivo!\n");
+							printf("Erro no arquivo!, fechando servidor!\n");
 							return -1;
 						}	
 
-						if((app->controle & LAST) != 0)
+						if((app->controle & LAST) != 0) //se for ultimo pacote cuidar padding e fechar arquivo
 						{
 							printf("Ultimo Pacote\n");
 
@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
 							printf("Fechando arquivo \n");
 							fclose(file);
 
-							//returnAck(ack, sockfd);
+							returnAck(ack);
 							ack = 0;
 
 							continue;
@@ -160,12 +160,12 @@ int main(int argc, char *argv[])
 					}
 
 					printf("Enviando ack - %d", ack);
-					//returnAck(ack, sockfd);
+					returnAck(ack);
 				}
 				else
 				{
 					printf("ACK error, ex: %d, rec: %d", ack, app->id);
-					//returnAck(ack, sockfd);
+					returnAck(ack);
 				}
 
 			continue;
@@ -175,64 +175,47 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-void returnAck(uint16_t ack, int sockfd)
+void returnAck(uint16_t ack)
 {
-	union eth_buffer buffer_send;
-	struct ifreq if_idx, if_mac, ifopts;
-	char ifName[IFNAMSIZ];
-	struct sockaddr_ll socket_address;
-	char this_mac[6];
+	uint8_t srcip[4];
 
-/* Get the index of the interface */
+	buffer_u.cooked_data.payload.ip.len = htons(sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(uint16_t));
+
+	srcip[0] = buffer_u.cooked_data.payload.ip.src[0];
+	srcip[1] = buffer_u.cooked_data.payload.ip.src[1];
+	srcip[2] = buffer_u.cooked_data.payload.ip.src[2];
+	srcip[3] = buffer_u.cooked_data.payload.ip.src[3];
+
+	buffer_u.cooked_data.payload.ip.src[0] = buffer_u.cooked_data.payload.ip.dst[0];
+	buffer_u.cooked_data.payload.ip.src[1] = buffer_u.cooked_data.payload.ip.dst[1];
+	buffer_u.cooked_data.payload.ip.src[2] = buffer_u.cooked_data.payload.ip.dst[2];
+	buffer_u.cooked_data.payload.ip.src[3] = buffer_u.cooked_data.payload.ip.dst[3];
+	buffer_u.cooked_data.payload.ip.dst[0] = srcip[0];
+	buffer_u.cooked_data.payload.ip.dst[1] = srcip[1];
+	buffer_u.cooked_data.payload.ip.dst[2] = srcip[2];
+	buffer_u.cooked_data.payload.ip.dst[3] = srcip[3];
+	buffer_u.cooked_data.payload.ip.sum = htons((~ipchksum((uint8_t *)&buffer_u.cooked_data.payload.ip) & 0xffff));
+
+	/* Fill UDP header */
+	uint16_t srcport = buffer_u.cooked_data.payload.udp.udphdr.src_port;
+	buffer_u.cooked_data.payload.udp.udphdr.src_port = buffer_u.cooked_data.payload.udp.udphdr.dst_port;
+	buffer_u.cooked_data.payload.udp.udphdr.dst_port = srcport;
+	buffer_u.cooked_data.payload.udp.udphdr.udp_len = htons(sizeof(struct udp_hdr) + sizeof(uint16_t));
+	buffer_u.cooked_data.payload.udp.udphdr.udp_chksum = 0;
+
+	/* Fill UDP payload */
+	memcpy(buffer_u.raw_data + sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr), &ack, sizeof(uint16_t));
+
+	struct sockaddr_ll socket_address;
+	struct ifreq if_idx;
+
+	/* Get the index of the interface */
 	memset(&if_idx, 0, sizeof(struct ifreq));
 	strncpy(if_idx.ifr_name, ifName, IFNAMSIZ-1);
 	if (ioctl(sockfd, SIOCGIFINDEX, &if_idx) < 0)
 		perror("SIOCGIFINDEX");
 	socket_address.sll_ifindex = if_idx.ifr_ifindex;
 	socket_address.sll_halen = ETH_ALEN;
-
-	/* Get the MAC address of the interface */
-	memset(&if_mac, 0, sizeof(struct ifreq));
-	strncpy(if_mac.ifr_name, ifName, IFNAMSIZ-1);
-	if (ioctl(sockfd, SIOCGIFHWADDR, &if_mac) < 0)
-		perror("SIOCGIFHWADDR");
-	memcpy(this_mac, if_mac.ifr_hwaddr.sa_data, 6);
-
-	/* End of configuration. Now we can send data using raw sockets. */
-
-	/* Fill the Ethernet frame header */
-	memcpy(buffer_send.cooked_data.ethernet.dst_addr, dst_mac, 6);
-	memcpy(buffer_send.cooked_data.ethernet.src_addr, dst_mac, 6);
-	buffer_send.cooked_data.ethernet.eth_type = htons(ETH_P_IP);
-
-	/* Fill IP header data. Fill all fields and a zeroed CRC field, then update the CRC! */
-	buffer_send.cooked_data.payload.ip.ver = 0x45;
-	buffer_send.cooked_data.payload.ip.tos = 0x00;
-	buffer_send.cooked_data.payload.ip.len = htons(sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(uint16_t));
-	buffer_send.cooked_data.payload.ip.id = htons(0x00);
-	buffer_send.cooked_data.payload.ip.off = htons(0x00);
-	buffer_send.cooked_data.payload.ip.ttl = 50;
-	buffer_send.cooked_data.payload.ip.proto = 17; //0xff;
-	buffer_send.cooked_data.payload.ip.sum = htons(0x0000);
-
-	buffer_send.cooked_data.payload.ip.src[0] = buffer_u.cooked_data.payload.ip.dst[0];
-	buffer_send.cooked_data.payload.ip.src[1] = buffer_u.cooked_data.payload.ip.dst[0];
-	buffer_send.cooked_data.payload.ip.src[2] = buffer_u.cooked_data.payload.ip.dst[0];
-	buffer_send.cooked_data.payload.ip.src[3] = buffer_u.cooked_data.payload.ip.dst[0];
-	buffer_send.cooked_data.payload.ip.dst[0] = buffer_u.cooked_data.payload.ip.src[0];
-	buffer_send.cooked_data.payload.ip.dst[1] = buffer_u.cooked_data.payload.ip.src[1];
-	buffer_send.cooked_data.payload.ip.dst[2] = buffer_u.cooked_data.payload.ip.src[2];
-	buffer_send.cooked_data.payload.ip.dst[3] = buffer_u.cooked_data.payload.ip.src[3];
-	buffer_send.cooked_data.payload.ip.sum = htons((~ipchksum((uint8_t *)&buffer_u.cooked_data.payload.ip) & 0xffff));
-
-	/* Fill UDP header */
-	buffer_send.cooked_data.payload.udp.udphdr.src_port = buffer_u.cooked_data.payload.udp.udphdr.dst_port;
-	buffer_send.cooked_data.payload.udp.udphdr.dst_port = buffer_u.cooked_data.payload.udp.udphdr.src_port;
-	buffer_send.cooked_data.payload.udp.udphdr.udp_len = htons(sizeof(struct udp_hdr) + sizeof(uint16_t));
-	buffer_send.cooked_data.payload.udp.udphdr.udp_chksum = 0;
-
-	/* Fill UDP payload */
-	memcpy(buffer_send.raw_data + sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr), &ack, sizeof(uint16_t));
 
 	/* Send it.. */
 	memcpy(socket_address.sll_addr, dst_mac, 6);
