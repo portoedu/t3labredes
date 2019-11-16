@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
 			if(size < 512){
 				app.controle |= PADDING;
 				size = 512 - size;
-				if(size > 256)
+				if(size > 255)
 				{
 					app.controle |= PADDING_256;
 					size -= 256;
