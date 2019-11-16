@@ -124,6 +124,8 @@ int main(int argc, char *argv[])
 
 						if((app->controle & LAST) != 0)
 						{
+							printf("Ultimo Pacote\n");
+
 							if((app->controle & PADDING) != 0)
 							{
 								printf("Padding \n");

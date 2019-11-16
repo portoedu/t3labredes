@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
 	
 	while(run)
 	{
-		memset(&app.data, '\0', sizeof(&app.data));
+		memset(&app.data, '\0', sizeof(app.data));
 		fread(&app.data, sizeof(uint8_t), 512, file);
 		
 		app.id = id;
