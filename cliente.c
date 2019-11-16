@@ -42,6 +42,7 @@ int main(int argc, char *argv[])
 	FILE * file;
 	int size;
 	bool run = true;
+	short id = 0;
 
 
 	/* Get interface name */
@@ -124,7 +125,7 @@ int main(int argc, char *argv[])
 	buffer_u.cooked_data.payload.udp.udphdr.udp_len = htons(sizeof(struct udp_hdr) + sizeof(struct application));
 	buffer_u.cooked_data.payload.udp.udphdr.udp_chksum = 0;
 
-	app.id = 0;
+	app.id = id;
 	app.controle = 0;
 	app.controle |= START;
 
@@ -149,7 +150,7 @@ int main(int argc, char *argv[])
 	}
 
 	memcpy(&app.data, argv[2], sizeof(argv[2]) + 1);
-	app.app_chksum = htons(in_cksum(&app, sizeof(app.id) + sizeof(app.controle) + sizeof(app.padd) + sizeof(app.data)));
+	app.app_chksum = htons(in_cksum((short *)&app, sizeof(app.id) + sizeof(app.controle) + sizeof(app.padd) + sizeof(app.data)));
 	//app.data[sizeof(app.data)] = '\0';
 
 	printf("id : %d , controle %d, padd %d, data: %s , chk %d\n", app.id, app.controle, app.padd, app.data, app.app_chksum);
@@ -161,6 +162,53 @@ int main(int argc, char *argv[])
 	memcpy(socket_address.sll_addr, dst_mac, 6);
 	if (sendto(sockfd, buffer_u.raw_data, sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(struct application), 0, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll)) < 0)
 		printf("Send failed\n");
+
+	//todo resp ack
+	
+	id++;
+	
+	while(run)
+	{
+		memset(&app.data, '\0', sizeof(&app.data));
+		fread(&app.data, sizeof(uint8_t), 512, file);
+		
+		app.id = id;
+		app.controle = 0;
+
+		if(feof(file))
+		{
+			size = strlen(app.data);
+			app.controle |= LAST;
+			run = false;
+
+			if(size < 512){
+				app.controle |= PADDING;
+				size = 512 - size;
+				if(size > 256)
+				{
+					app.controle |= PADDING_256;
+					size -= 256;
+				}
+				app.padd = size;
+			}
+		}
+
+		if(id < 64*1024 -1)
+			id++;
+		else
+			id = 0;
+
+		app.app_chksum = htons(in_cksum((short *)&app, sizeof(app.id) + sizeof(app.controle) + sizeof(app.padd) + sizeof(app.data)));
+			/* Fill UDP payload */
+		memcpy(buffer_u.raw_data + sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr), &app, sizeof(struct application));
+
+		/* Send it.. */
+		memcpy(socket_address.sll_addr, dst_mac, 6);
+		if (sendto(sockfd, buffer_u.raw_data, sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(struct application), 0, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll)) < 0)
+			printf("Send failed\n");
+
+		//todo resp ack
+	}
 
 	fclose(file);
 	return 0;
