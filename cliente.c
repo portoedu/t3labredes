@@ -13,6 +13,7 @@
 #include "raw.h"
 #include "checksum.h"
 #include <time.h>
+#include <math.h>
 
 #define PROTO_UDP	17
 #define SRC_PORT	54322
@@ -49,6 +50,7 @@ int main(int argc, char *argv[])
 	char *p;
 	uint16_t ack;
 	time_t inicio, fim;
+	int expoente = 0;
 
 
 	/* Get interface name */
@@ -199,80 +201,105 @@ int main(int argc, char *argv[])
 	}
 
 	id++;
-	
+	expoente = 1;
+	int ack_expected;
+	int num_acks;
+
+	ack_expected = id + 1;
 	while(run)
 	{
-		memset(&app.data, '\0', sizeof(app.data));
-		fread(&app.data, sizeof(uint8_t), 512, file);
-		
-		app.id = id;
-		app.controle = 0;
-		app.padd = 0;
-
-		if(feof(file))
-		{
-			size = strlen(app.data);
-			app.controle |= LAST;
-			run = false;
-
-			if(size < 512){
-				app.controle |= PADDING;
-				size = 512 - size;
-				if(size > 255)
-				{
-					app.controle |= PADDING_256;
-					size -= 256;
-				}
-				app.padd = size;
-			}
-		}
-
-		app.app_chksum = htons(in_cksum((short *)&app, sizeof(app.id) + sizeof(app.controle) + sizeof(app.padd) + sizeof(app.data)));
-			/* Fill UDP payload */
-		memcpy(buffer_u.raw_data + sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr), &app, sizeof(struct application));
-
-		printf("Enviando -> id : %d , controle %d, padd %d, chk %d\n", app.id, app.controle, app.padd, app.app_chksum);
 
 		resend:
-		/* Send it.. */
-		memcpy(socket_address.sll_addr, dst_mac, 6);
-		if (sendto(sockfd, buffer_u.raw_data, sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(struct application), 0, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll)) < 0)
-			printf("Send failed\n");
+		printf("\nEnviando %0.1f pacotes\n", pow(2, expoente));
+		for(int i=0; i < pow(2, expoente); i++)
+		{
+			memset(&app.data, '\0', sizeof(app.data));
+			fread(&app.data, sizeof(uint8_t), 512, file);
+			
+			app.id = id;
+			app.controle = 0;
+			app.padd = 0;
 
-
-		inicio = time(NULL);
-		fim = time(NULL);
-		
-		do{
-			fim = time(NULL);
-		
-			if(( fim - inicio ) > DEF_TIMEOUT)
+			if(feof(file))
 			{
-				printf("Timeout: %ld, reenviando!\n", (fim - inicio));
-				goto resend;
+				num_acks = i + 1;
+				i = pow(2, expoente);
+				size = strlen(app.data);
+				app.controle |= LAST;
+				run = false;
+
+				if(size < 512){
+					app.controle |= PADDING;
+					size = 512 - size;
+					if(size > 255)
+					{
+						app.controle |= PADDING_256;
+						size -= 256;
+					}
+					app.padd = size;
+				}
+			}
+			else
+			{
+				num_acks = i + 1;
 			}
 
-			numbytes = recvfrom(sockfd, buffer_rec.raw_data, ETH_LEN, 0, NULL, NULL);
-		}while(buffer_rec.cooked_data.ethernet.eth_type == ntohs(ETH_P_IP) &&
-		buffer_rec.cooked_data.payload.ip.proto == PROTO_UDP && 
-		buffer_rec.cooked_data.payload.udp.udphdr.dst_port == ntohs(SRC_PORT)
-		&& buffer_rec.cooked_data.payload.udp.udphdr.udp_len == htons(sizeof(struct udp_hdr) + sizeof(uint16_t))
-		&& !memcpy(buffer_u.cooked_data.ethernet.dst_addr, this_mac, sizeof(this_mac)));
+			app.app_chksum = htons(in_cksum((short *)&app, sizeof(app.id) + sizeof(app.controle) + sizeof(app.padd) + sizeof(app.data)));
+				/* Fill UDP payload */
+			memcpy(buffer_u.raw_data + sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr), &app, sizeof(struct application));
 
-		p = (char *)(&buffer_rec.cooked_data.payload.udp.udphdr);	
-		p +=  8;
-		ack = (uint16_t)*p;
+			printf("Enviando -> id : %d , controle %d, padd %d, chk %d\n", app.id, app.controle, app.padd, app.app_chksum);
 
-		printf("Recebdo Ack %x\n", ack);
-		if(ack != (id + 1))
-		{
-			goto resend;
+			/* Send it.. */
+			memcpy(socket_address.sll_addr, dst_mac, 6);
+			if (sendto(sockfd, buffer_u.raw_data, sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(struct application), 0, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll)) < 0)
+				printf("Send failed\n");
+
+			if(id < 64*1024 -1)
+				id++;
+			else
+				id = 0;
+
 		}
+		
+		printf("Esperando %d acks, prox ack %d\n", num_acks, ack_expected);
+		for(int i=0; i < num_acks; i++)
+		{
 
-		if(id < 64*1024 -1)
-			id++;
-		else
-			id = 0;
+			inicio = time(NULL);
+			fim = time(NULL);
+			
+			do{
+				fim = time(NULL);
+			
+				if(( fim - inicio ) > DEF_TIMEOUT)
+				{
+					printf("Timeout: %ld, reenviando!\n", (fim - inicio));
+					expoente = 0;
+					goto resend;
+				}
+
+				numbytes = recvfrom(sockfd, buffer_rec.raw_data, ETH_LEN, 0, NULL, NULL);
+			}while(buffer_rec.cooked_data.ethernet.eth_type == ntohs(ETH_P_IP) &&
+			buffer_rec.cooked_data.payload.ip.proto == PROTO_UDP && 
+			buffer_rec.cooked_data.payload.udp.udphdr.dst_port == ntohs(SRC_PORT)
+			&& buffer_rec.cooked_data.payload.udp.udphdr.udp_len == htons(sizeof(struct udp_hdr) + sizeof(uint16_t))
+			&& !memcpy(buffer_u.cooked_data.ethernet.dst_addr, this_mac, sizeof(this_mac)));
+
+			p = (char *)(&buffer_rec.cooked_data.payload.udp.udphdr);	
+			p +=  8;
+			ack = (uint16_t)*p;
+
+			printf("Recebdo Ack %d\n", ack);
+			if(ack != ack_expected)
+			{
+				expoente = 0;
+				goto resend;
+			}
+			ack_expected++;
+
+		}
+		expoente++;
 	}
 
 	printf("Envio finalizado, fechando arquivo!\n");
