@@ -70,11 +70,10 @@ int main(int argc, char *argv[])
 				buffer_u.cooked_data.payload.ip.proto
 			);
 				p = (char *)&buffer_u.cooked_data.payload.udp.udphdr + ntohs(buffer_u.cooked_data.payload.udp.udphdr.udp_len);
-				*p = '\0';
-				printf("src port: %d dst port: %d size: %d msg: %s \n", 
+				printf("src port: %d dst port: %d size: %d \n", 
 				ntohs(buffer_u.cooked_data.payload.udp.udphdr.src_port), ntohs(buffer_u.cooked_data.payload.udp.udphdr.dst_port),
-				ntohs(buffer_u.cooked_data.payload.udp.udphdr.udp_len), (char *)&buffer_u.cooked_data.payload.udp.udphdr + sizeof(struct udp_hdr)
-				); 
+				ntohs(buffer_u.cooked_data.payload.udp.udphdr.udp_len)); 
+				
 				p = (char *)(&buffer_u.cooked_data.payload.udp.udphdr);	
 				p += sizeof(struct udp_hdr);
 

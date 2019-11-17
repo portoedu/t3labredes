@@ -204,6 +204,7 @@ int main(int argc, char *argv[])
 	expoente = 1;
 	int ack_expected;
 	int num_acks;
+	int dup_ack = 0;
 
 	ack_expected = id + 1;
 	while(run)
@@ -274,8 +275,9 @@ int main(int argc, char *argv[])
 			
 				if(( fim - inicio ) > DEF_TIMEOUT)
 				{
-					printf("Timeout: %ld, reenviando!\n", (fim - inicio));
+					printf("Recomeçando slow start, timeout: %ld!\n", (fim - inicio));
 					expoente = 0;
+
 					goto resend;
 				}
 
@@ -293,10 +295,25 @@ int main(int argc, char *argv[])
 			printf("Recebdo Ack %d\n", ack);
 			if(ack != ack_expected)
 			{
-				expoente = 0;
-				goto resend;
+				printf("Ack recebido diferente do esperado, rec: %d, ex: %d\n", ack, ack_expected);
+				printf("Duplicados: %d\n", dup_ack);
+				if(dup_ack == 3)
+				{
+					printf("Recomeçando slow start, fast retransmit, 3 ack duplicados!\n");
+					expoente = 0;
+					//todo
+					goto resend;
+				}
+				else
+				{
+					dup_ack++;
+				}
 			}
-			ack_expected++;
+			else
+			{
+				dup_ack = 0;
+				ack_expected++;
+			}
 
 		}
 		expoente++;
