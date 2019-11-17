@@ -12,9 +12,11 @@
 #include <stdbool.h>
 #include "raw.h"
 #include "checksum.h"
+#include <time.h>
 
 #define PROTO_UDP	17
 #define SRC_PORT	54322
+#define DEF_TIMEOUT 1
 
 char this_mac[6];
 char dst_mac[6] =	{0x08, 0x00, 0x27, 0x12, 0x38, 0x8e};
@@ -46,6 +48,7 @@ int main(int argc, char *argv[])
 	short id = 0;
 	char *p;
 	uint16_t ack;
+	time_t inicio, fim;
 
 
 	/* Get interface name */
@@ -166,7 +169,18 @@ int main(int argc, char *argv[])
 	if (sendto(sockfd, buffer_u.raw_data, sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(struct application), 0, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll)) < 0)
 		printf("Send failed\n");
 
+	inicio = time(NULL);
+	fim = time(NULL);
+
 	do{
+		fim = time(NULL);
+
+		if(( fim - inicio ) > DEF_TIMEOUT)
+		{
+			printf("Timeout: %ld, reenviando!\n", (fim - inicio));
+			goto resendStart;
+		}
+
 		numbytes = recvfrom(sockfd, buffer_rec.raw_data, ETH_LEN, 0, NULL, NULL);
 	}while(buffer_rec.cooked_data.ethernet.eth_type == ntohs(ETH_P_IP) &&
 	 buffer_rec.cooked_data.payload.ip.proto == PROTO_UDP && 
@@ -225,7 +239,19 @@ int main(int argc, char *argv[])
 		if (sendto(sockfd, buffer_u.raw_data, sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(struct application), 0, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll)) < 0)
 			printf("Send failed\n");
 
+
+		inicio = time(NULL);
+		fim = time(NULL);
+		
 		do{
+			fim = time(NULL);
+		
+			if(( fim - inicio ) > DEF_TIMEOUT)
+			{
+				printf("Timeout: %ld, reenviando!\n", (fim - inicio));
+				goto resend;
+			}
+
 			numbytes = recvfrom(sockfd, buffer_rec.raw_data, ETH_LEN, 0, NULL, NULL);
 		}while(buffer_rec.cooked_data.ethernet.eth_type == ntohs(ETH_P_IP) &&
 		buffer_rec.cooked_data.payload.ip.proto == PROTO_UDP && 
