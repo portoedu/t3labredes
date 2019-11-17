@@ -276,7 +276,8 @@ int main(int argc, char *argv[])
 				{
 					printf("Recomeçando slow start, timeout: %ld!\n", (fim - inicio));
 					expoente = 0;
-					fseek(file, ack*512, SEEK_SET);
+					id = ack;
+					fseek(file, (ack - 1)*512, SEEK_SET);
 					goto resend;
 				}
 
@@ -300,7 +301,8 @@ int main(int argc, char *argv[])
 				{
 					printf("Recomeçando slow start, fast retransmit, 3 ack duplicados!\n");
 					expoente = 0;
-					fseek(file, ack*512, SEEK_SET);
+					id = ack;
+					fseek(file, (ack - 1)*512, SEEK_SET);
 					goto resend;
 				}
 				else
