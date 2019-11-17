@@ -51,6 +51,9 @@ int main(int argc, char *argv[])
 	uint16_t ack;
 	time_t inicio, fim;
 	int expoente = 0;
+	int ack_expected;
+	int num_acks;
+	int dup_ack = 0;
 
 
 	/* Get interface name */
@@ -202,11 +205,8 @@ int main(int argc, char *argv[])
 
 	id++;
 	expoente = 1;
-	int ack_expected;
-	int num_acks;
-	int dup_ack = 0;
-
 	ack_expected = id + 1;
+
 	while(run)
 	{
 
@@ -227,7 +227,6 @@ int main(int argc, char *argv[])
 				i = pow(2, expoente);
 				size = strlen(app.data);
 				app.controle |= LAST;
-				run = false;
 
 				if(size < 512){
 					app.controle |= PADDING;
@@ -277,7 +276,7 @@ int main(int argc, char *argv[])
 				{
 					printf("Recomeçando slow start, timeout: %ld!\n", (fim - inicio));
 					expoente = 0;
-
+					fseek(file, ack*512, SEEK_SET);
 					goto resend;
 				}
 
@@ -301,7 +300,7 @@ int main(int argc, char *argv[])
 				{
 					printf("Recomeçando slow start, fast retransmit, 3 ack duplicados!\n");
 					expoente = 0;
-					//todo
+					fseek(file, ack*512, SEEK_SET);
 					goto resend;
 				}
 				else
@@ -317,6 +316,12 @@ int main(int argc, char *argv[])
 
 		}
 		expoente++;
+
+		if(feof(file))
+		{
+			run = false;
+		}
+
 	}
 
 	printf("Envio finalizado, fechando arquivo!\n");
