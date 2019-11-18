@@ -20,7 +20,7 @@
 #define DEF_TIMEOUT 1
 
 char this_mac[6];
-char dst_mac[6] =	{0x08, 0x00, 0x27, 0x12, 0x38, 0x8e};
+char dst_mac[6] =	{0xa4, 0x1f, 0x72, 0xf5, 0x90, 0x80};
 union eth_buffer buffer_u;
 union eth_buffer buffer_rec;
 
@@ -120,14 +120,14 @@ int main(int argc, char *argv[])
 	buffer_u.cooked_data.payload.ip.proto = 17; //0xff;
 	buffer_u.cooked_data.payload.ip.sum = htons(0x0000);
 
-	buffer_u.cooked_data.payload.ip.src[0] = 192;
-	buffer_u.cooked_data.payload.ip.src[1] = 168;
-	buffer_u.cooked_data.payload.ip.src[2] = 0;
-	buffer_u.cooked_data.payload.ip.src[3] = 24;
-	buffer_u.cooked_data.payload.ip.dst[0] = 192;
-	buffer_u.cooked_data.payload.ip.dst[1] = 168;
-	buffer_u.cooked_data.payload.ip.dst[2] = 0;
-	buffer_u.cooked_data.payload.ip.dst[3] = 24;
+	buffer_u.cooked_data.payload.ip.src[0] = 10;
+	buffer_u.cooked_data.payload.ip.src[1] = 32;
+	buffer_u.cooked_data.payload.ip.src[2] = 143;
+	buffer_u.cooked_data.payload.ip.src[3] = 19;
+	buffer_u.cooked_data.payload.ip.dst[0] = 10;
+	buffer_u.cooked_data.payload.ip.dst[1] = 32;
+	buffer_u.cooked_data.payload.ip.dst[2] = 143;
+	buffer_u.cooked_data.payload.ip.dst[3] = 136;
 	buffer_u.cooked_data.payload.ip.sum = htons((~ipchksum((uint8_t *)&buffer_u.cooked_data.payload.ip) & 0xffff));
 
 	/* Fill UDP header */
@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
 	 buffer_rec.cooked_data.payload.ip.proto == PROTO_UDP && 
 	 buffer_rec.cooked_data.payload.udp.udphdr.dst_port == ntohs(SRC_PORT)
 	 && buffer_rec.cooked_data.payload.udp.udphdr.udp_len == htons(sizeof(struct udp_hdr) + sizeof(uint16_t))
-	 && !memcpy(buffer_u.cooked_data.ethernet.dst_addr, this_mac, sizeof(this_mac)));
+	 && !memcpy(buffer_rec.cooked_data.ethernet.dst_addr, this_mac, sizeof(this_mac)));
 
 	p = (char *)(&buffer_rec.cooked_data.payload.udp.udphdr);	
 	p +=  8;
@@ -274,7 +274,7 @@ int main(int argc, char *argv[])
 			
 				if(( fim - inicio ) > DEF_TIMEOUT)
 				{
-					printf("Recomeçando slow start, timeout: %ld!\n", (fim - inicio));
+					printf("Recomeçando slow start, timeout: %ld!\n Reenviando pacote %d\n", (fim - inicio), ack);
 					expoente = 0;
 					id = ack;
 					fseek(file, (ack - 1)*512, SEEK_SET);
@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
 			buffer_rec.cooked_data.payload.ip.proto == PROTO_UDP && 
 			buffer_rec.cooked_data.payload.udp.udphdr.dst_port == ntohs(SRC_PORT)
 			&& buffer_rec.cooked_data.payload.udp.udphdr.udp_len == htons(sizeof(struct udp_hdr) + sizeof(uint16_t))
-			&& !memcpy(buffer_u.cooked_data.ethernet.dst_addr, this_mac, sizeof(this_mac)));
+			&& !memcpy(buffer_rec.cooked_data.ethernet.dst_addr, this_mac, sizeof(this_mac)));
 
 			p = (char *)(&buffer_rec.cooked_data.payload.udp.udphdr);	
 			p +=  8;
@@ -299,7 +299,7 @@ int main(int argc, char *argv[])
 				printf("Duplicados: %d\n", dup_ack);
 				if(dup_ack == 3)
 				{
-					printf("Recomeçando slow start, fast retransmit, 3 ack duplicados!\n");
+					printf("Recomeçando slow start, fast retransmit, 3 ack duplicados!\n Reenviando pacote %d\n", ack);
 					expoente = 0;
 					id = ack;
 					fseek(file, (ack - 1)*512, SEEK_SET);
