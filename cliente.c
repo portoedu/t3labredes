@@ -16,11 +16,11 @@
 #include <math.h>
 
 #define PROTO_UDP	17
-#define SRC_PORT	54322
+#define SRC_PORT	54323
 #define DEF_TIMEOUT 1
 
 char this_mac[6];
-char dst_mac[6] =	{0xa4, 0x1f, 0x72, 0xf5, 0x90, 0x80};
+char dst_mac[6] =	{0x08, 0x00, 0x27, 0x12, 0x38, 0x8e};
 union eth_buffer buffer_u;
 union eth_buffer buffer_rec;
 
@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 	bool run = true;
 	short id = 0;
 	char *p;
-	uint16_t ack;
+	uint16_t ack = 1;
 	time_t inicio, fim;
 	int expoente = 0;
 	int ack_expected;
@@ -120,14 +120,14 @@ int main(int argc, char *argv[])
 	buffer_u.cooked_data.payload.ip.proto = 17; //0xff;
 	buffer_u.cooked_data.payload.ip.sum = htons(0x0000);
 
-	buffer_u.cooked_data.payload.ip.src[0] = 10;
-	buffer_u.cooked_data.payload.ip.src[1] = 32;
-	buffer_u.cooked_data.payload.ip.src[2] = 143;
-	buffer_u.cooked_data.payload.ip.src[3] = 19;
-	buffer_u.cooked_data.payload.ip.dst[0] = 10;
-	buffer_u.cooked_data.payload.ip.dst[1] = 32;
-	buffer_u.cooked_data.payload.ip.dst[2] = 143;
-	buffer_u.cooked_data.payload.ip.dst[3] = 136;
+	buffer_u.cooked_data.payload.ip.src[0] = 192;
+	buffer_u.cooked_data.payload.ip.src[1] = 168;
+	buffer_u.cooked_data.payload.ip.src[2] = 0;
+	buffer_u.cooked_data.payload.ip.src[3] = 24;
+	buffer_u.cooked_data.payload.ip.dst[0] = 192;
+	buffer_u.cooked_data.payload.ip.dst[1] = 168;
+	buffer_u.cooked_data.payload.ip.dst[2] = 0;
+	buffer_u.cooked_data.payload.ip.dst[3] = 24;
 	buffer_u.cooked_data.payload.ip.sum = htons((~ipchksum((uint8_t *)&buffer_u.cooked_data.payload.ip) & 0xffff));
 
 	/* Fill UDP header */
@@ -163,12 +163,13 @@ int main(int argc, char *argv[])
 	memcpy(&app.data, argv[2], sizeof(argv[2]) + 1);
 	app.app_chksum = htons(in_cksum((short *)&app, sizeof(app.id) + sizeof(app.controle) + sizeof(app.padd) + sizeof(app.data)));
 
-	printf("Iniciando envio-> id : %d , controle %d, padd %d, Nome: %s , chk %d\n", app.id, app.controle, app.padd, app.data, app.app_chksum);
+	printf("Iniciando envio->\n");
 
 	/* Fill UDP payload */
 	memcpy(buffer_u.raw_data + sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr), &app, sizeof(struct application));
 
 	resendStart:
+	printf("id : %d , controle %d, padd %d, Nome: %s , chk %d\n", app.id, app.controle, app.padd, app.data, app.app_chksum);
 	/* Send it.. */
 	memcpy(socket_address.sll_addr, dst_mac, 6);
 	if (sendto(sockfd, buffer_u.raw_data, sizeof(struct eth_hdr) + sizeof(struct ip_hdr) + sizeof(struct udp_hdr) + sizeof(struct application), 0, (struct sockaddr*)&socket_address, sizeof(struct sockaddr_ll)) < 0)
@@ -191,13 +192,15 @@ int main(int argc, char *argv[])
 	 buffer_rec.cooked_data.payload.ip.proto == PROTO_UDP && 
 	 buffer_rec.cooked_data.payload.udp.udphdr.dst_port == ntohs(SRC_PORT)
 	 && buffer_rec.cooked_data.payload.udp.udphdr.udp_len == htons(sizeof(struct udp_hdr) + sizeof(uint16_t))
-	 && !memcpy(buffer_rec.cooked_data.ethernet.dst_addr, this_mac, sizeof(this_mac)));
+	 && !memcpy(buffer_rec.cooked_data.ethernet.dst_addr, this_mac, sizeof(this_mac))
+	 && buffer_u.cooked_data.payload.ip.dst[3] == buffer_rec.cooked_data.payload.ip.src[3]
+	 && buffer_u.cooked_data.payload.ip.src[3] == buffer_rec.cooked_data.payload.ip.dst[3]);
 
 	p = (char *)(&buffer_rec.cooked_data.payload.udp.udphdr);	
 	p +=  8;
 	ack = (uint16_t)*p;
 
-	printf("Recebdo Ack %x\n", ack);
+	printf("Recebido Ack %x\n", ack);
 	if(ack != (id + 1))
 	{
 	 	goto resendStart;
@@ -286,7 +289,9 @@ int main(int argc, char *argv[])
 			buffer_rec.cooked_data.payload.ip.proto == PROTO_UDP && 
 			buffer_rec.cooked_data.payload.udp.udphdr.dst_port == ntohs(SRC_PORT)
 			&& buffer_rec.cooked_data.payload.udp.udphdr.udp_len == htons(sizeof(struct udp_hdr) + sizeof(uint16_t))
-			&& !memcpy(buffer_rec.cooked_data.ethernet.dst_addr, this_mac, sizeof(this_mac)));
+			&& !memcpy(buffer_rec.cooked_data.ethernet.dst_addr, this_mac, sizeof(this_mac))
+			&& buffer_u.cooked_data.payload.ip.dst[3] == buffer_rec.cooked_data.payload.ip.src[3]
+	 		&& buffer_u.cooked_data.payload.ip.src[3] == buffer_rec.cooked_data.payload.ip.dst[3]);
 
 			p = (char *)(&buffer_rec.cooked_data.payload.udp.udphdr);	
 			p +=  8;
