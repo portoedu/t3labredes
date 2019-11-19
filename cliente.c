@@ -210,6 +210,7 @@ int main(int argc, char *argv[])
 	expoente = 1;
 	ack_expected = id + 1;
 
+	int last_ack = 1;
 	while(run)
 	{
 
@@ -302,21 +303,30 @@ int main(int argc, char *argv[])
 			{
 				printf("Ack recebido diferente do esperado, rec: %d, ex: %d\n", ack, ack_expected);
 				printf("Duplicados: %d\n", dup_ack);
-				if(dup_ack == 3)
+				if(ack == last_ack)
 				{
-					printf("Recomeçando slow start, fast retransmit, 3 ack duplicados!\n Reenviando pacote %d\n", ack);
-					expoente = 0;
-					id = ack;
-					fseek(file, (ack - 1)*512, SEEK_SET);
-					goto resend;
+					if(dup_ack == 3)
+					{
+						printf("Recomeçando slow start, fast retransmit, 3 ack duplicados!\n Reenviando pacote %d\n", ack);
+						expoente = 0;
+						id = ack;
+						fseek(file, (ack - 1)*512, SEEK_SET);
+						goto resend;
+					}
+					else
+					{
+						dup_ack++;
+					}
 				}
 				else
 				{
-					dup_ack++;
+					last_ack = ack;
+					dup_ack = 0;
 				}
 			}
 			else
 			{
+				last_ack = ack;
 				dup_ack = 0;
 				ack_expected++;
 			}
